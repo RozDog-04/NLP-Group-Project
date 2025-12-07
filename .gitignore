@@ -15,6 +15,7 @@ Thumbs.db
 hotpot_train_v1.1.json
 hotpot_dev_distractor_v1.json
 hotpot_dev_fullwiki_v1.json
+predictions_dev.json
 glove.840B.300d.txt
 *.pkl
 *.pt
