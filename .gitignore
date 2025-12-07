@@ -1,0 +1,26 @@
+# Virtual environments and Python cache
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Local environment/config secrets
+.env
+
+# Large datasets and embeddings
+hotpot_train_v1.1.json
+hotpot_dev_distractor_v1.json
+hotpot_dev_fullwiki_v1.json
+glove.840B.300d.txt
+*.pkl
+*.pt
+*.bin
+
+# Intermediate outputs
+*.log
+*.tmp
+*.cache/
