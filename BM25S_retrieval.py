@@ -1,6 +1,6 @@
 import argparse
 import pickle
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 import bm25s
 
 """
@@ -12,42 +12,44 @@ python BM25S_retrieval.py \
   --top-k 10
 """
 
-def bm25s_search(
-    index_path: str,
-    store_path: str,
-    query: str,
-    top_k: int = 5,
-) -> List[Dict[str, Any]]:
-    # Loads retriever without loading a corpus
-    retriever = bm25s.BM25.load(index_path, load_corpus=False)
+class BM25Retriever:
+    def __init__(self, index_path: str, store_path: str):
+        print(f"[INFO] Loading BM25 index from {index_path}...")
+        self.retriever = bm25s.BM25.load(index_path, load_corpus=False)
+        
+        print(f"[INFO] Loading BM25 store from {store_path}...")
+        with open(store_path, "rb") as f:
+            self.store = pickle.load(f)
+            
+        self.texts: List[str] = self.store["texts"]
+        self.meta: List[Dict[str, Any]] = self.store["meta"]
 
-    # Loads store (has the texts + metadata)
-    with open(store_path, "rb") as f:
-        store = pickle.load(f)
+    def retrieve(self, query: str, top_k: int = 5) -> Tuple[List[Dict[str, Any]], List[float]]:
+        # Tokenizes query using the same tokenizer used for indexing
+        query_tokens = bm25s.tokenize(query)
 
-    texts: List[str] = store["texts"]
-    meta: List[Dict[str, Any]] = store["meta"]
+        # Gets doc IDs + scores
+        doc_ids, scores = self.retriever.retrieve(query_tokens, k=top_k)
+        
+        # bm25s returns shape (n_queries, k), we only have 1 query
+        doc_ids = doc_ids[0]
+        scores = scores[0]
 
-    # Tokenizes query using the same tokenizer used for indexing
-    query_tokens = bm25s.tokenize(query)
+        results: List[Dict[str, Any]] = []
+        result_scores: List[float] = []
+        
+        for doc_idx, score in zip(doc_ids, scores):
+            i = int(doc_idx)   # numeric ID
+            results.append(
+                {
+                    "score": float(score),
+                    "text": self.texts[i],
+                    "meta": self.meta[i],
+                }
+            )
+            result_scores.append(float(score))
 
-    # Gets doc IDs + scores
-    doc_ids, scores = retriever.retrieve(query_tokens, k=top_k)
-    doc_ids = doc_ids[0]
-    scores = scores[0]
-
-    results: List[Dict[str, Any]] = []
-    for doc_idx, score in zip(doc_ids, scores):
-        i = int(doc_idx)   # numeric ID
-        results.append(
-            {
-                "score": float(score),
-                "text": texts[i],
-                "meta": meta[i],
-            }
-        )
-
-    return results
+        return results, result_scores
 
 def main():
     parser = argparse.ArgumentParser(description="Searches the BM25S index")
@@ -59,7 +61,12 @@ def main():
     args = parser.parse_args()
 
     print(f"[INFO] Searching for query: {args.query!r}")
-    results = bm25s_search(args.index, args.store, args.query, top_k=args.top_k)
+    
+    # Initialize retriever
+    retriever = BM25Retriever(args.index, args.store)
+    
+    # Retrieve
+    results, _ = retriever.retrieve(args.query, top_k=args.top_k)
 
     for r in results:
         print("=" * 80)

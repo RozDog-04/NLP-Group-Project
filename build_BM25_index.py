@@ -1,7 +1,7 @@
 import argparse
 import pickle
 import bm25s
-from data_utils2 import load_chunks_jsonl
+from data_utils import load_chunks_jsonl
 
 """
 To run:

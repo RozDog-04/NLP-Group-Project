@@ -1,12 +1,9 @@
-# predict_full.py
-
 import json
 from typing import Dict
 
 from data_utils import load_hotpot_json, extract_context_paragraphs
 from llm_pipeline import AnswerGenerator, ContextReranker
-from predict import DenseRetriever
-
+from BM25S_retrieval import BM25Retriever
 
 def run_full_dev(
     dev_json_path: str,
@@ -23,17 +20,21 @@ def run_full_dev(
         }
     where <example_id> is `_id` (or `id` if `_id` is missing) from the dev examples.
     """
-    # 1) Load dev data
+    # 1) Loads dev data
     data = load_hotpot_json(dev_json_path)
 
     # 2) Initialise components once
-    retriever = DenseRetriever()
+    # retriever = DenseRetriever()
+    index_path = "data/index/bm25s_index"
+    store_path = "data/index/bm25_store.pkl"
+    retriever = BM25Retriever(index_path=index_path, store_path=store_path)
+    
     answer_gen = AnswerGenerator()
     reranker = ContextReranker()
 
     predictions: Dict[str, str] = {}
 
-    # 3) Loop over all dev examples
+    # 3) Loops over all dev examples
     for idx, sample in enumerate(data):
         if idx >= 100:        # change this number to process fewer examples for testing
             break
@@ -45,33 +46,36 @@ def run_full_dev(
             continue
 
         # Build all candidate contexts (one per page)
-        contexts = extract_context_paragraphs(sample, include_titles=True)
+        # contexts = extract_context_paragraphs(sample, include_titles=True)
 
-        if not contexts:
-            predictions[example_id] = ""
-            continue
+        # if not contexts:
+        #     predictions[example_id] = ""
+        #     continue
 
         # First-stage dense retrieval over all candidates
-        dense_indices, dense_scores = retriever.retrieve(
-            question, contexts, top_k=len(contexts)
-        )
+        # dense_indices, dense_scores = retriever.retrieve(
+        #     question, contexts, top_k=len(contexts)
+        # )
+        
+        # Retrieves from BM25
+        results, scores = retriever.retrieve(question, top_k=10)
+        retrieved_ctxs = [r["text"] for r in results]
 
         # LLM-based reranking of those candidates
-        dense_ctxs = [contexts[i] for i in dense_indices]
-        rerank_scores = reranker.score(question, dense_ctxs)
+        # dense_ctxs = [contexts[i] for i in dense_indices]
+        rerank_scores = reranker.score(question, retrieved_ctxs)
 
         # Sort by rerank score (descending)
         reranked_local = sorted(
-            range(len(dense_ctxs)),
+            range(len(retrieved_ctxs)),
             key=lambda i: rerank_scores[i],
             reverse=True,
         )
-        ranked_indices = [dense_indices[i] for i in reranked_local]
+        ranked_ctxs = [retrieved_ctxs[i] for i in reranked_local]
 
         # Select top-k contexts for answering
-        k = min(top_k_for_answer, len(ranked_indices))
-        top_indices = ranked_indices[:k]
-        selected_ctxs = [contexts[i] for i in top_indices]
+        k = min(top_k_for_answer, len(ranked_ctxs))
+        selected_ctxs = ranked_ctxs[:k]
 
         # Generate a short Hotpot-style answer (yes/no or short phrase)
         answer = answer_gen.generate_answer(question, selected_ctxs)
