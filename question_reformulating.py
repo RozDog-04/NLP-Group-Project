@@ -19,7 +19,7 @@ class QuestionRewriter:
     # 1) Simple lexical rewrites
     def simple_rewrites(self, question: str, n: int = 2) -> List[str]:
         prompt = f"""
-        Rewrite the following question {n} different ways, keeping the meaning exactly
+        Your job is to create lexical rewrites of the following question {n} different ways, keeping the meaning exactly
         the same. The rewrites will be used for lexical (BM25) search.
 
         Guidelines:
@@ -27,7 +27,7 @@ class QuestionRewriter:
         - Avoid pronouns like "he", "she", "they", "it".
         - Keep the sentence structure simple.
         - Keep the length under 20 words.
-        - Output ONE rewrite per line with NO bullets or numbering.
+        - Output ONE rewrite per line with NO bullets, numbering, or extra text.
 
         Question:
         "{question}"
@@ -39,19 +39,50 @@ class QuestionRewriter:
     # 2) Semantic decomposition
     def semantic_decomposition(self, question: str, max_steps: int = 3) -> List[str]:
         prompt = f"""
-        The goal is multi-hop question answering over Wikipedia.
+        You are decomposing complex questions for multi-hop question answering over Wikipedia.
 
-        Decompose the question into up to {max_steps} subquestions that, if answered in
-        order, would allow you to answer the original question.
+        Your task is to split the original question into up to {max_steps} atomic subquestions
+        that correspond to the underlying reasoning steps.
+
+        Definitions:
+        - A subquestion is a smaller question whose answer is needed as part of a reasoning chain
+          to answer the original question.
+        - Each subquestion should be focused on ONE concrete fact (e.g. an entity's attribute,
+          relation, or link to another entity).
 
         Guidelines:
-        - Each subquestion must be self-contained (repeat entity names explicitly).
-        - Keep each subquestion under 20 words.
-        - Output ONE subquestion per line with NO bullets or numbering.
+        - Subquestions must be SELF-CONTAINED: repeat entity names explicitly, do not use pronouns.
+        - Do NOT introduce new entity names that are not mentioned or clearly implied in the original question.
+          When you need to refer to an unknown entity, describe it (e.g. "the author of Harry Potter'").
+        - Each subquestion should be answerable from a short Wikipedia passage.
+        - Each subquestion must be under 20 words.
+        - Start from the first step in the reasoning chain and proceed in logical order.
+        - Do NOT just paraphrase the original question.
+        - Stop when you have enough subquestions to answer the original question, up to {max_steps}.
+        - OUTPUT FORMAT: ONE subquestion per line, with NO bullets, numbers, or extra text.
+
+        Example 1:
+        Original question:
+        "Musician and satirist Allie Goertz wrote a song about the 'The Simpsons' character Milhouse, who Matt Groening named after who?"
+
+        Good subquestions:
+        "Which 'The Simpsons' character did musician and satirist Allie Goertz write a song about?"
+        "Who did Matt Groening name the character Milhouse after?"
+
+        Example 2:
+        Original question:
+        "Were Scott Derrickson and Ed Wood of the same nationality?"
+
+        Good subquestions:
+        "What is the nationality of Scott Derrickson?"
+        "What is the nationality of Ed Wood?"
+
+        Now decompose the following question into subquestions:
 
         Original question:
         "{question}"
         """
+
         resp = self.llm.complete(prompt)
         subs = [ln.strip("- ").strip() for ln in resp.splitlines() if ln.strip()]
         return subs[:max_steps]
@@ -61,10 +92,10 @@ class QuestionRewriter:
         
         prompt = f"""
         Identify up to {max_entities} important entities (people, places, organizations,
-        works, events, objects etc.) mentioned in this question.
+        works, events, dates, objects etc.) mentioned in this question.
 
         For each entity you identify, write ONE query suitable for a Wikipedia search that focuses on
-        the background or key fact about that entity.
+        the background or a key fact about that entity.
 
         Format:
         <entity>: <entity-focused query>
@@ -73,14 +104,23 @@ class QuestionRewriter:
         - Include the entity name exactly.
         - Optionally mention a relevant relation from the question.
         - Keep each query under 20 words.
-        - Return ONE entity/query per line.
-
+        - OUTPUT FORMAT: ONE subquestion per line, with NO bullets, numbers, or extra text.
+        
+        Example:
         Question:
+        "Were Scott Derrickson and Ed Wood of the same nationality?"
+
+        Good output:
+        Scott Derrickson: Scott Derrickson nationality
+        Ed Wood: Ed Wood nationality
+
+        Now process this question:
         "{question}"
         """
 
+
         resp = self.llm.complete(prompt)
-        queries: List[str] = []
+        queries: List[str] = [  ]
         for ln in resp.splitlines():
             ln = ln.strip()
             if ":" not in ln:
