@@ -155,4 +155,4 @@ def run_simple_pipeline(dev_json_path: str, n_samples: int = 3, top_k_for_answer
 
 
 if __name__ == "__main__":
-    run_simple_pipeline("hotpot_dev_distractor_v1.json", n_samples=5)
+    run_simple_pipeline("hotpot_dev_distractor_v1.json", n_samples=15)
