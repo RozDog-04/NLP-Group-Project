@@ -6,7 +6,7 @@ from llm_pipeline import AnswerGenerator, ContextReranker, QueryRewriter
 from BM25S_retrieval import BM25Retriever
 
 
-def run_simple_pipeline(dev_json_path: str, n_samples: int = 3, top_k_for_answer: int = 5):
+def run_simple_pipeline(dev_json_path: str, n_samples: int = 3, top_k_for_answer: int = 10):
     data = load_hotpot_json(dev_json_path)
 
     index_path = "data/index/bm25s_index"
@@ -63,11 +63,21 @@ def run_simple_pipeline(dev_json_path: str, n_samples: int = 3, top_k_for_answer
             answers=candidate_answers,
         )
 
+        def is_non_empty(ans: str) -> bool:
+            return ans.strip() and ans.strip().lower() != "i cannot answer from the given context."
+
+        candidates_idx = list(range(len(candidate_answers)))
+        non_empty_idxs = [i for i in candidates_idx if is_non_empty(candidate_answers[i])]
+
         if answer_scores:
-            best_idx = max(range(len(candidate_answers)), key=lambda i: answer_scores[i])
+            pool = non_empty_idxs if non_empty_idxs else candidates_idx
+            best_idx = max(pool, key=lambda i: answer_scores[i] if i < len(answer_scores) else 0.0)
             final_answer = candidate_answers[best_idx]
         else:
-            final_answer = candidate_answers[0] if candidate_answers else ""
+            if non_empty_idxs:
+                final_answer = candidate_answers[non_empty_idxs[0]]
+            else:
+                final_answer = candidate_answers[0] if candidate_answers else ""
 
         print(f"Question: {question}")
         print("Queries used:")

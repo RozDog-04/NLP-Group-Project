@@ -136,11 +136,15 @@ class AnswerGenerator:
             "- the question\n"
             "- the supporting context passages\n"
             "- a list of candidate answers\n\n"
-            "You must rate how well each candidate answer is supported by the context on a scale from 0 to 1:\n"
-            "- 1.0 means the answer is clearly and directly supported by the context.\n"
-            "- 0.0 means the answer is contradicted or not supported at all.\n\n"
+            "Rate how well each candidate answer is supported by the CONTEXT ONLY\n"
+            "Use a score between 0.0 and 1.0:\n"
+            "- 1.0 = clearly and directly supported by the context.\n"
+            "- 0.8 = strongly supported, small ambiguity.\n"
+            "- 0.5 = partially supported or plausible but not clearly stated.\n"
+            "- 0.2 = weakly supported, only vague hints.\n"
+            "- 0.0 = contradicted by the context or not supported at all.\n"
             "Return ONLY a JSON array of objects of the form:\n"
-            '[{\"index\": 0, \"confidence\": 0.9}, {\"index\": 1, \"confidence\": 0.1}, ...]\n'
+            '[{\"index\": 0, \"confidence\": 0.73}, {\"index\": 1, \"confidence\": 0.35}, ...]\n'
             "where `index` is the answer index and `confidence` is a float in [0, 1]."
         )
 
@@ -157,7 +161,7 @@ class AnswerGenerator:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ],
-            temperature=0,
+            temperature=0.1,
         )
 
         content = ""
