@@ -114,6 +114,185 @@ class AnswerGenerator:
         return answer
 
 
+    def score_candidate_answers(
+        self,
+        question: str,
+        contexts: list[str],
+        answers: list[str],
+    ) -> list[float]:
+        """
+        Given a question, a list of context passages, and candidate answers,
+        return confidence scores per answer in [0, 1], aligned with `answers`.
+        """
+        if not answers:
+            return []
+
+        context_block = "\n\n---\n\n".join(contexts)
+        answers_block = "\n".join([f"[{i}] {ans}" for i, ans in enumerate(answers)])
+
+        system_prompt = (
+            "You are evaluating candidate answers for a HotpotQA question.\n"
+            "Given:\n"
+            "- the question\n"
+            "- the supporting context passages\n"
+            "- a list of candidate answers\n\n"
+            "You must rate how well each candidate answer is supported by the context on a scale from 0 to 1:\n"
+            "- 1.0 means the answer is clearly and directly supported by the context.\n"
+            "- 0.0 means the answer is contradicted or not supported at all.\n\n"
+            "Return ONLY a JSON array of objects of the form:\n"
+            '[{\"index\": 0, \"confidence\": 0.9}, {\"index\": 1, \"confidence\": 0.1}, ...]\n'
+            "where `index` is the answer index and `confidence` is a float in [0, 1]."
+        )
+
+        user_content = (
+            f"Question:\n{question}\n\n"
+            f"Context passages:\n{context_block}\n\n"
+            f"Candidate answers:\n{answers_block}\n\n"
+            "JSON:"
+        )
+
+        res = self.client.chat.complete(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0,
+        )
+
+        content = ""
+        try:
+            choice = res.choices[0]
+            message = getattr(choice, "message", None)
+            content = getattr(message, "content", None) if message is not None else None
+            if content is None and isinstance(message, dict):
+                content = message.get("content")
+            if isinstance(content, list):
+                parts = []
+                for block in content:
+                    if isinstance(block, dict):
+                        parts.append(block.get("text", ""))
+                    else:
+                        text_val = getattr(block, "text", None)
+                        parts.append(text_val if text_val is not None else str(block))
+                content = "".join(parts)
+        except Exception:
+            content = ""
+
+        if not isinstance(content, str):
+            content = str(content)
+
+        scores = [0.0] * len(answers)
+
+        parsed = None
+        try:
+            parsed = json.loads(content)
+        except Exception:
+            start = content.find("[")
+            end = content.rfind("]")
+            if start != -1 and end != -1 and end > start:
+                try:
+                    parsed = json.loads(content[start : end + 1])
+                except Exception:
+                    parsed = None
+
+        if not parsed:
+            return scores
+
+        for entry in parsed:
+            try:
+                idx = int(entry.get("index"))
+                conf = float(entry.get("confidence", 0))
+                if 0 <= idx < len(answers):
+                    scores[idx] = max(0.0, min(1.0, conf))
+            except Exception:
+                continue
+
+        return scores
+
+
+class QueryRewriter:
+    """
+    Optional helper to rewrite a question into retrieval-friendly queries.
+    """
+
+    def __init__(self, model: str = "mistral-small-latest"):
+        api_key = _load_mistral_api_key()
+        if not api_key:
+            raise RuntimeError("Please set MISTRAL_API_KEY in your environment.")
+        self.client = Mistral(api_key=api_key)
+        self.model = model
+
+    def _extract_content(self, res: Any) -> str:
+        content = ""
+        try:
+            choice = res.choices[0]
+            message = getattr(choice, "message", None)
+            content = getattr(message, "content", None) if message is not None else None
+            if content is None and isinstance(message, dict):
+                content = message.get("content")
+            if isinstance(content, list):
+                parts = []
+                for block in content:
+                    if isinstance(block, dict):
+                        parts.append(block.get("text", ""))
+                    else:
+                        text_val = getattr(block, "text", None)
+                        parts.append(text_val if text_val is not None else str(block))
+                content = "".join(parts)
+        except Exception:
+            content = ""
+        if not isinstance(content, str):
+            content = str(content)
+        return content.strip()
+
+    def rewrite(self, question: str) -> str:
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Rewrite the question into a concise keyword search query. "
+                    "Remove filler words; keep names, entities, and key nouns/verbs. "
+                    "Return only the query string."
+                ),
+            },
+            {"role": "user", "content": question},
+        ]
+
+        res = self.client.chat.complete(
+            model=self.model,
+            messages=messages,
+            temperature=0,
+        )
+
+        return self._extract_content(res) or question
+
+    def rewrite_entity_focused(self, question: str) -> str:
+        """
+        Generate an entity-focused query variant from the original question.
+        """
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Rewrite the question into an entity-focused search query. "
+                    "Extract key entities (people, places, organizations, works) and "
+                    "include minimal relational terms if needed. "
+                    "Return only the compact entity-focused query."
+                ),
+            },
+            {"role": "user", "content": question},
+        ]
+
+        res = self.client.chat.complete(
+            model=self.model,
+            messages=messages,
+            temperature=0,
+        )
+
+        return self._extract_content(res) or question
+
+
 class ContextReranker:
     def __init__(self, model: str = "mistral-small-latest"):
         api_key = _load_mistral_api_key()
