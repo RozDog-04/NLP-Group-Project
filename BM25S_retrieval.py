@@ -42,6 +42,7 @@ class BM25Retriever:
             i = int(doc_idx)   # numeric ID
             results.append(
                 {
+                    "doc_id": i,
                     "score": float(score),
                     "text": self.texts[i],
                     "meta": self.meta[i],
