@@ -1,5 +1,5 @@
 torch
-rank-bm25
 mistralai
-bm25s
 sentence-transformers
+bm25s
+ujson
