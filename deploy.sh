@@ -92,4 +92,4 @@ sleep 5
 echo "[7/7] Running predict_full.py..."
 $PYTHON predict_full.py
 
-echo "✅ deploy.sh finished successfully."
+echo "deploy.sh finished successfully."
