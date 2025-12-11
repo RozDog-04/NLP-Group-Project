@@ -82,14 +82,15 @@ $PYTHON build_BM25_index.py \
 echo "[6/7] Running predict_sample.py..."
 $PYTHON predict_sample.py
 
+echo "deploy.sh appears to have succeeded. Running predict_full.py in 5 seconds..."
+
 ########################################
 # 7. Wait a bit, then run predict_full.py
 ########################################
 
-echo "Waiting 5 seconds before running predict_full.py..."
 sleep 5
 
 echo "[7/7] Running predict_full.py..."
 $PYTHON predict_full.py
 
-echo "✅ deploy.sh finished successfully."
+echo "deploy.sh finished successfully."
