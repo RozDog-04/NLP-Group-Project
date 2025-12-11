@@ -7,9 +7,7 @@ This repository contains our coursework implementation of a **multi-trajectory R
 - Retrieve and re-rank evidence with an **LLM-based reranker**,
 - Generate **short Hotpot-style answers** with an LLM and **confidence-based voting**.
 
-The entire environment setup, data download, indexing, and prediction pipeline can be run via a single script: `deploy.sh`. :contentReference[oaicite:0]{index=0}  
-
-The original HotpotQA dataset and baseline code are described in Yang et al. (2018). :contentReference[oaicite:1]{index=1}  
+The entire environment setup, data download, indexing, and prediction pipeline can be run via a single script: `deploy.sh`.
 
 ---
 
